@@ -183,8 +183,16 @@ gitflow_has_prefixes_configured() {
 	git config --get gitflow.prefix.versiontag >/dev/null 2>&1
 }
 
+gitflow_has_gitlab_configured() {
+	git config --get gitflow.gitlab.url >/dev/null 2>&1       && \
+	git config --get gitflow.gitlab.token >/dev/null 2>&1     && \
+	git config --get gitflow.gitlab.project >/dev/null 2>&1   && \
+    type curl >/dev/null 2>&1
+}
+
 gitflow_is_initialized() {
 	gitflow_has_master_configured                    && \
+    gitflow_has_gitlab_configured                    && \
 	gitflow_has_develop_configured                   && \
 	[ "$(git config --get gitflow.branch.master)" !=    \
 	  "$(git config --get gitflow.branch.develop)" ] && \
@@ -323,4 +331,22 @@ require_branches_equal() {
 			die "Branches need merging first."
 		fi
 	fi
+}
+
+gitlab_request() {
+    if [ $# -lt 2 ]; then
+        die "Wrong number of arguments: first is HTTP method, second is query"
+    fi
+    gitlab_url=$(git config --get gitflow.gitlab.url)
+    gitlab_token=$(git config --get gitflow.gitlab.token)
+    gitlab_project=$(git config --get gitflow.gitlab.project)
+    connector="?"
+    if [[ $2 == *\?* ]]; then
+        connector="&"
+    fi
+    path=`echo $2 | sed "s/%PROJECT%/${gitlab_project}/g"`
+    url="${gitlab_url}${path}${connector}private_token=${gitlab_token}"
+    echo -e "\n*****request to $url with method $1 *****\n"
+    RESPONSE_RAW=`curl -X $1 "$url"`
+    echo "${RESPONSE_RAW}"
 }

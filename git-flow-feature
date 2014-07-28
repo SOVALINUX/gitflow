@@ -46,9 +46,12 @@ init() {
 usage() {
 	echo "usage: git flow feature [list] [-v]"
 	echo "       git flow feature start [-F] <name> [<base>]"
-	echo "       git flow feature finish [-rFkDS] [<name|nameprefix>]"
+    echo "       git flow feature finish [-rFkDS] [<name|nameprefix>]"
+	echo "       git flow feature finish_local [-rFkDS] [<name|nameprefix>]"
 	echo "       git flow feature publish <name>"
 	echo "       git flow feature track <name>"
+    echo "       git flow feature accept <merge_request_id>"
+    echo "       git flow feature revert <name>"
 	echo "       git flow feature diff [<name|nameprefix>]"
 	echo "       git flow feature rebase [-i] [<name|nameprefix>]"
 	echo "       git flow feature checkout [<name|nameprefix>]"
@@ -230,6 +233,122 @@ cmd_start() {
 }
 
 cmd_finish() {
+    DEFINE_boolean accept false "accept merge request immideately" a
+    parse_args "$@"
+    expand_nameprefix_arg_or_current
+    require_branch "$BRANCH"
+    
+    # detect if we're restoring from a merge conflict
+	if [ -f "$DOT_GIT_DIR/.gitflow/MERGE_BASE" ]; then
+		#
+		# TODO: detect that we're working on the correct branch here!
+		# The user need not necessarily have given the same $NAME twice here
+		# (although he/she should).
+		# 
+
+		# TODO: git_is_clean_working_tree() should provide an alternative
+		# exit code for "unmerged changes in working tree", which we should
+		# actually be testing for here
+		if git_is_clean_working_tree; then
+			FINISH_BASE=$(cat "$DOT_GIT_DIR/.gitflow/MERGE_BASE")
+
+			# Since the working tree is now clean, either the user did a
+			# succesfull merge manually, or the merge was cancelled.
+			# We detect this using git_is_branch_merged_into()
+			if git_is_branch_merged_into "$BRANCH" "$FINISH_BASE"; then
+				rm -f "$DOT_GIT_DIR/.gitflow/MERGE_BASE"
+				helper_finish_cleanup
+				exit 0
+			else
+				# If the user cancelled the merge and decided to wait until later,
+				# that's fine. But we have to acknowledge this by removing the
+				# MERGE_BASE file and continuing normal execution of the finish
+				rm -f "$DOT_GIT_DIR/.gitflow/MERGE_BASE"
+			fi
+		else
+			echo
+			echo "Merge conflicts not resolved yet, use:"
+			echo "    git mergetool"
+			echo "    git commit"
+			echo 
+			echo "You can then complete the finish by running it again:"
+			echo "    git flow feature finish $NAME"
+			echo
+			exit 1
+		fi
+	fi
+    
+    # sanity checks
+	require_clean_working_tree
+    
+    if has "$ORIGIN/$BRANCH" $(git_remote_branches); then
+		require_branches_equal "$BRANCH" "$ORIGIN/$BRANCH"
+        git_do checkout "$BRANCH"
+        git_do push
+	fi
+	if has "$ORIGIN/$DEVELOP_BRANCH" $(git_remote_branches); then
+		require_branches_equal "$DEVELOP_BRANCH" "$ORIGIN/$DEVELOP_BRANCH"
+	fi
+    
+    REVIEWERS_STR=$(git config --get gitflow.gitlab.reviewers)
+    
+    if [ -z "${REVIEWERS_STR}" -a "${REVIEWERS_STR}" != " " ]; then
+        echo -e "No reviewers yet. Run \e[37mgit flow reviewer add Name\e[0m to add new reviewer"
+        exit 0
+    fi
+    IFS=","
+    read -a REVIEWERS <<< "${REVIEWERS_STR}"
+    echo "Pick reviewer from list:"
+    index=1
+    for rev in ${REVIEWERS[@]}; do
+        echo -n "$index - "
+        echo "$rev" | sed 's/;.*//'g
+        index=`expr $index + 1`
+    done
+    read REV_INDEX
+    index=1
+    for rev in ${REVIEWERS[@]}; do
+        if [ "$index" == "$REV_INDEX" ]; then
+            REVIEWER_ID=`echo "$rev" | sed 's/.*;//'g`
+        fi
+        index=`expr $index + 1`
+    done
+    if [ -z "${REVIEWER_ID}" -a "${REVIEWER_ID}" != " " ]; then
+        die "No reviewer picked. Please enter number to pick from list"
+    fi
+    FEATURE_BRANCH=`echo "${BRANCH}" | sed 's/\//%2F/g'`
+    DEV_BRANCH=`echo "${DEVELOP_BRANCH}" | sed 's/\//%2F/g'`
+    RESPONSE_RAW=$(gitlab_request "POST" "api/v3/projects/%PROJECT%/merge_requests?source_branch=${FEATURE_BRANCH}&target_branch=${DEV_BRANCH}&assignee_id=${REVIEWER_ID}&title=Merge%20${FEATURE_BRANCH}%20to%20${DEV_BRANCH}")
+    if [[ ${RESPONSE_RAW} != *\"id\"* ]]; then
+        die "Creating merge request failed, response = ${RESPONSE_RAW}"
+    fi
+    MR_ID=`echo "$RESPONSE_RAW" | sed 's/.*"id":\([0-9]*\).*/\1/'`
+    if flag accept; then
+        cmd_accept "$MR_ID"
+        RESPONSE_RAW=$(gitlab_request "POST" "api/v3/projects/%PROJECT%/issues?title=Review%20merge%20request%20${MR_ID}&assignee_id=${REVIEWER_ID}")
+        if [[ ${RESPONSE_RAW} != *\"id\"* ]]; then
+            die "Issue to review merge request wasn't created, response = ${RESPONSE_RAW}"
+        fi
+    fi
+}
+
+cmd_accept() {
+    if [ "$#" -ne 1 ]; then
+        die "Error: Should be one argument - id of the merge request"
+    fi
+    RESPONSE_RAW=$(gitlab_request "PUT" "api/v3/projects/%PROJECT%/merge_request/$1/merge")
+    echo "Result of accepting merge request $1 is ${RESPONSE_RAW}"
+}
+
+cmd_revert() {
+    parse_args "$@"
+    expand_nameprefix_arg_or_current
+    require_branch "$BRANCH"
+    echo -e "To revert $BRANCH after its merging to ${DEVELOP_BRANCH} use command \e[37mgit revert -m 1 SHA ID of merge commit\e[0m"
+    echo "But be sure when you will be merge it again that you either reverted revert commit above or squash all commits into one in order to change SHA id of the new commit"
+}
+
+cmd_finish_local() {
 	DEFINE_boolean fetch false "fetch from $ORIGIN before performing finish" F
 	DEFINE_boolean rebase false "rebase instead of merge" r
 	DEFINE_boolean keep false "keep branch after performing finish" k

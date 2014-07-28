@@ -308,7 +308,36 @@ cmd_default() {
 		[ "$answer" = "-" ] && prefix= || prefix=${answer:-$default_suggestion}
 		git_do config gitflow.prefix.versiontag "$prefix"
 	fi
-
+    
+    #Gitlab url
+    if ! git config --get gitflow.gitlab.url >/dev/null 2>&1 || flag force; then
+		printf "Enter Gitlab url. For example https://git.example.com/\n"
+        read gitlab_url
+		git_do config gitflow.gitlab.url "$gitlab_url"
+	fi
+    
+    #Gitlab token
+    if ! git config --get gitflow.gitlab.token >/dev/null 2>&1 || flag force; then
+        if [ -z "${gitlab_url}" -a "${gitlab_url}" != " " ]; then
+            gitlab_url=$(git config --get gitflow.gitlab.url)
+        fi
+		printf "Enter Gitlab token for your account. Probably you can found it at ${gitlab_url}profile/account.\n"
+        read gitlab_token
+		git_do config gitflow.gitlab.token "$gitlab_token"
+	fi
+    
+    #Gitlab project id
+    if ! git config --get gitflow.gitlab.project >/dev/null 2>&1 || flag force; then
+        if [ -z "${gitlab_url}" -a "${gitlab_url}" != " " ]; then
+            gitlab_url=$(git config --get gitflow.gitlab.url)
+        fi
+        if [ -z "${gitlab_token}" -a "${gitlab_token}" != " " ]; then
+            gitlab_token=$(git config --get gitflow.gitlab.token)
+        fi
+		echo -e "Enter Gitlab project id. Project id can be gained by REST request ${gitlab_url}api/v3/projects/PROJECT_SPACE%2FPROJECT_NAME?private_token=${gitlab_token}\n"
+        read gitlab_project
+		git_do config gitflow.gitlab.project "$gitlab_project"
+	fi
 
 	# TODO: what to do with origin?
 }
