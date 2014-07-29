@@ -5,6 +5,10 @@ A collection of Git extensions to provide high-level repository operations
 for Vincent Driessen's [branching model](http://nvie.com/git-model "original
 blog post").
 
+This extension of git flow makes work with gitlab code review is simple and integrated in process.
+
+And just some meta tags:)
+Git-flow gitlab code review integration
 
 Getting started
 ---------------
@@ -23,6 +27,10 @@ Or have a look at one of these screen casts:
 Installing git-flow
 -------------------
 See the Wiki for up-to-date [Installation Instructions](https://github.com/nvie/gitflow/wiki/Installation).
+But replace nvie/gitflow by SOVALINUX/gitflow
+e.g.
+git://github.com/SOVALINUX/gitflow.git
+https://github.com/SOVALINUX/gitflow
 
 
 Integration with your shell
