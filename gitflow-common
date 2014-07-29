@@ -186,7 +186,7 @@ gitflow_has_prefixes_configured() {
 gitflow_has_gitlab_configured() {
 	git config --get gitflow.gitlab.url >/dev/null 2>&1       && \
 	git config --get gitflow.gitlab.token >/dev/null 2>&1     && \
-	git config --get gitflow.gitlab.project >/dev/null 2>&1   && \
+	git config --get gitflow.gitlab.projectid >/dev/null 2>&1   && \
     type curl >/dev/null 2>&1
 }
 
@@ -334,19 +334,20 @@ require_branches_equal() {
 }
 
 gitlab_request() {
+    local  __resultvar=$3
     if [ $# -lt 2 ]; then
         die "Wrong number of arguments: first is HTTP method, second is query"
     fi
     gitlab_url=$(git config --get gitflow.gitlab.url)
     gitlab_token=$(git config --get gitflow.gitlab.token)
-    gitlab_project=$(git config --get gitflow.gitlab.project)
+    gitlab_project_id=$(git config --get gitflow.gitlab.projectid)
     connector="?"
     if [[ $2 == *\?* ]]; then
         connector="&"
     fi
-    path=`echo $2 | sed "s/%PROJECT%/${gitlab_project}/g"`
+    path=`echo "$2" | sed "s/%PROJECT_ID%/${gitlab_project_id}/g"`
     url="${gitlab_url}${path}${connector}private_token=${gitlab_token}"
-    echo -e "\n*****request to $url with method $1 *****\n"
+    printf "\n*****request to $url with method $1 *****\n"
     RESPONSE_RAW=`curl -X $1 "$url"`
-    echo "${RESPONSE_RAW}"
+    eval $__resultvar="'${RESPONSE_RAW}'"
 }

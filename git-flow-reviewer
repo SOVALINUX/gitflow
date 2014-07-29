@@ -81,7 +81,7 @@ cmd_add() {
     NAME=`echo "$1" | sed 's/\s/%20/g'`
     gitlab_url=$(git config --get gitflow.gitlab.url)
     gitlab_token=$(git config --get gitflow.gitlab.token)
-    RESPONSE_RAW=$(gitlab_request "GET" "api/v3/users?search=${NAME}")
+    gitlab_request "GET" "api/v3/users?search=${NAME}" RESPONSE_RAW
     USER_ID=`echo "$RESPONSE_RAW" | sed 's/.*"id":\([0-9]*\).*/\1/'`
     if [ -z "${USER_ID}" -a "${USER_ID}" != " " ]; then
         die "No such user found"

@@ -50,7 +50,7 @@ usage() {
 	echo "       git flow feature finish_local [-rFkDS] [<name|nameprefix>]"
 	echo "       git flow feature publish <name>"
 	echo "       git flow feature track <name>"
-    echo "       git flow feature accept <merge_request_id>"
+    echo "       git flow feature accept <name>"
     echo "       git flow feature revert <name>"
 	echo "       git flow feature diff [<name|nameprefix>]"
 	echo "       git flow feature rebase [-i] [<name|nameprefix>]"
@@ -233,7 +233,7 @@ cmd_start() {
 }
 
 cmd_finish() {
-    DEFINE_boolean accept false "accept merge request immideately" a
+    DEFINE_boolean accept false "accept merge request immediately" "a"
     parse_args "$@"
     expand_nameprefix_arg_or_current
     require_branch "$BRANCH"
@@ -318,14 +318,18 @@ cmd_finish() {
     fi
     FEATURE_BRANCH=`echo "${BRANCH}" | sed 's/\//%2F/g'`
     DEV_BRANCH=`echo "${DEVELOP_BRANCH}" | sed 's/\//%2F/g'`
-    RESPONSE_RAW=$(gitlab_request "POST" "api/v3/projects/%PROJECT%/merge_requests?source_branch=${FEATURE_BRANCH}&target_branch=${DEV_BRANCH}&assignee_id=${REVIEWER_ID}&title=Merge%20${FEATURE_BRANCH}%20to%20${DEV_BRANCH}")
+    gitlab_request "POST" "api/v3/projects/%PROJECT_ID%/merge_requests?source_branch=${FEATURE_BRANCH}&target_branch=${DEV_BRANCH}&assignee_id=${REVIEWER_ID}&title=Merge%20${FEATURE_BRANCH}%20to%20${DEV_BRANCH}" RESPONSE_RAW
     if [[ ${RESPONSE_RAW} != *\"id\"* ]]; then
         die "Creating merge request failed, response = ${RESPONSE_RAW}"
     fi
-    MR_ID=`echo "$RESPONSE_RAW" | sed 's/.*"id":\([0-9]*\).*/\1/'`
+    MR_ID=`echo "$RESPONSE_RAW" | sed 's/{"id":\([0-9]*\).*/\1/'`
+    MR_IID=`echo "$RESPONSE_RAW" | sed 's/.*"iid":\([0-9]*\).*/\1/'`
     if flag accept; then
-        cmd_accept "$MR_ID"
-        RESPONSE_RAW=$(gitlab_request "POST" "api/v3/projects/%PROJECT%/issues?title=Review%20merge%20request%20${MR_ID}&assignee_id=${REVIEWER_ID}")
+        do_accept "$MR_ID" "$NAME"
+        gitlab_url=`echo $(git config --get gitflow.gitlab.url) | sed 's/\//%2F/g'`
+        gitlab_project=`echo $(git config --get gitflow.gitlab.project) | sed 's/\//%2F/g'`
+        desc="${gitlab_url}${gitlab_project}%2Fmerge_requests%2F${MR_IID}"
+        gitlab_request "POST" "api/v3/projects/%PROJECT_ID%/issues?title=Review%20merge%20request%20${MR_ID}&description=${desc}&assignee_id=${REVIEWER_ID}" RESPONSE_RAW
         if [[ ${RESPONSE_RAW} != *\"id\"* ]]; then
             die "Issue to review merge request wasn't created, response = ${RESPONSE_RAW}"
         fi
@@ -334,10 +338,25 @@ cmd_finish() {
 
 cmd_accept() {
     if [ "$#" -ne 1 ]; then
-        die "Error: Should be one argument - id of the merge request"
+        die "Error: Should be one argument - name of the feature"
     fi
-    RESPONSE_RAW=$(gitlab_request "PUT" "api/v3/projects/%PROJECT%/merge_request/$1/merge")
+    gitlab_request "GET" "api/v3/projects/%PROJECT_ID%/merge_requests?state=opened" RESPONSE_RAW
+    RES=`echo "${RESPONSE_RAW}" | sed 's/"assignee":{[^\}]*}//g' | sed 's/"author":{[^\}]*}//g'`
+    MR_ID=`echo "$RES" | sed 's/.*\({[^\}]*"source_branch":"${PREFIX}$1"[^\}]*}\).*/\1/' | sed 's/.*"id":\([0-9]*\).*/\1/'`
+    do_accept "$MR_ID" "$1"
+}
+
+do_accept() {
+    if [ "$#" -ne 2 ]; then
+        die "Error: Should be two arguments - id of the merge request and name of the feature"
+    fi
+    gitlab_request "PUT" "api/v3/projects/%PROJECT_ID%/merge_request/$1/merge" RESPONSE_RAW
     echo "Result of accepting merge request $1 is ${RESPONSE_RAW}"
+    if [[ ${RESPONSE_RAW} == *Branch\ cannot\ be\ merged* ]]; then
+        echo "Branch cannot be merged automatically, performing manual merge"
+        gitlab_request "PUT" "api/v3/projects/%PROJECT_ID%/merge_request/$1?state_event=close" RESPONSE_RAW
+        cmd_finish_local "-k" "$2"
+    fi
 }
 
 cmd_revert() {
