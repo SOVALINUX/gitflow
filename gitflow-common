@@ -347,7 +347,7 @@ gitlab_request() {
     fi
     path=`echo "$2" | sed "s/%PROJECT_ID%/${gitlab_project_id}/g"`
     url="${gitlab_url}${path}${connector}private_token=${gitlab_token}"
-    printf "\n*****request to $url with method $1 *****\n"
+    #printf "\n*****request to $url with method $1 *****\n"
     RESPONSE_RAW=`curl -X $1 "$url"`
     eval $__resultvar="'${RESPONSE_RAW}'"
 }
