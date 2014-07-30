@@ -311,8 +311,10 @@ cmd_default() {
     
     #Gitlab url
     if ! git config --get gitflow.gitlab.url >/dev/null 2>&1 || flag force; then
-		printf "Enter Gitlab url. For example https://git.example.com/\n"
-        read gitlab_url
+        default_suggestion=$(git config --get gitflow.gitlab.url || echo "")
+		printf "Enter Gitlab url. For example https://git.example.com/ [${default_suggestion}]\n"
+        read answer
+        [ "$answer" = "-" ] && gitlab_url= || gitlab_url=${answer:-$default_suggestion}
 		git_do config gitflow.gitlab.url "$gitlab_url"
 	fi
     
@@ -321,8 +323,10 @@ cmd_default() {
         if [ -z "${gitlab_url}" -a "${gitlab_url}" != " " ]; then
             gitlab_url=$(git config --get gitflow.gitlab.url)
         fi
-		printf "Enter Gitlab token for your account. Probably you can found it at ${gitlab_url}profile/account.\n"
-        read gitlab_token
+        default_suggestion=$(git config --get gitflow.gitlab.token || echo "")
+		printf "Enter Gitlab token for your account. Probably you can found it at ${gitlab_url}profile/account : [${default_suggestion}]\n"
+        read answer
+        [ "$answer" = "-" ] && gitlab_token= || gitlab_token=${answer:-$default_suggestion}
 		git_do config gitflow.gitlab.token "$gitlab_token"
 	fi
     
@@ -334,8 +338,10 @@ cmd_default() {
         if [ -z "${gitlab_token}" -a "${gitlab_token}" != " " ]; then
             gitlab_token=$(git config --get gitflow.gitlab.token)
         fi
-        echo "Enter gitlab project space and name, e.g. prj-space/my-project"
-        read PROJECT
+        default_suggestion=$(git config --get gitflow.gitlab.project || echo "")
+        echo "Enter gitlab project space and name, e.g. prj-space/my-project [${default_suggestion}]"
+        read answer
+        [ "$answer" = "-" ] && PROJECT= || PROJECT=${answer:-$default_suggestion}
         PROJECT_ESC=`echo "$PROJECT" | sed 's/\//%2F/g'`
         RESPONSE_RAW=`curl -X GET "${gitlab_url}api/v3/projects/${PROJECT_ESC}?private_token=${gitlab_token}"`
         if [[ ${RESPONSE_RAW} != *\"id\"* ]]; then
@@ -345,6 +351,14 @@ cmd_default() {
         git_do config gitflow.gitlab.project "$PROJECT"
 		git_do config gitflow.gitlab.projectid "${gitlab_project_id}"
 	fi
+    
+    if ! git config --get gitflow.gitlab.taskurl >/dev/null 2>&1 || flag force; then
+        default_suggestion=$(git config --get gitflow.gitlab.taskurl || echo "")
+        echo "Enter pattern for task url. For example https://jira.example.com/jira/browse/%TASK_ID% [${default_suggestion}]\n"
+        read answer
+        [ "$answer" = "-" ] && taskurl= || taskurl=${answer:-$default_suggestion}
+        git_do config gitflow.gitlab.taskurl "${taskurl}"
+    fi
 
 	# TODO: what to do with origin?
 }

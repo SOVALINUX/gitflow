@@ -203,7 +203,11 @@ cmd_start() {
 	require_name_arg
 
 	# sanity checks
-	require_branch_absent "$BRANCH"
+    if has $BRANCH $(git_all_branches); then
+        echo "Feature already exist. Checking it out."
+        git_do checkout "$BRANCH"
+        exit 0
+    fi
 
 	# update the local repo with remote changes, if asked
 	if flag fetch; then
@@ -318,12 +322,23 @@ cmd_finish() {
     fi
     FEATURE_BRANCH=`echo "${BRANCH}" | sed 's/\//%2F/g'`
     DEV_BRANCH=`echo "${DEVELOP_BRANCH}" | sed 's/\//%2F/g'`
+    echo "Enter task id for bug tracker or leave it empty"
+    read TASK_ID
     gitlab_request "POST" "api/v3/projects/%PROJECT_ID%/merge_requests?source_branch=${FEATURE_BRANCH}&target_branch=${DEV_BRANCH}&assignee_id=${REVIEWER_ID}&title=Merge%20${FEATURE_BRANCH}%20to%20${DEV_BRANCH}" RESPONSE_RAW
     if [[ ${RESPONSE_RAW} != *\"id\"* ]]; then
         die "Creating merge request failed, response = ${RESPONSE_RAW}"
     fi
     MR_ID=`echo "$RESPONSE_RAW" | sed 's/{"id":\([0-9]*\).*/\1/'`
     MR_IID=`echo "$RESPONSE_RAW" | sed 's/.*"iid":\([0-9]*\).*/\1/'`
+    TASK_URL_PATTERN=$(git config --get gitflow.gitlab.taskurl)
+    if [ -z "${TASK_URL_PATTERN}" -a "${TASK_URL_PATTERN}" != " " ] || [ -z "${TASK_ID}" -a "${TASK_ID}" != " " ]; then
+        echo "Skipping adding task url"
+    else
+        echo "Adding task link to merge request"
+        TASK_URL=`echo "${TASK_URL_PATTERN}" | sed "s/%TASK_ID%/${TASK_ID}/g" | sed "s/\//%2F/g" | sed "s/ /%20/g" | sed "s/&/%26/g" | sed "s/\?/%3F/g"`
+        gitlab_request "POST" "api/v3/projects/%PROJECT_ID%/merge_request/${MR_ID}/comments?note=${TASK_URL}" RESPONSE_RAW
+    fi
+    
     if flag accept; then
         do_accept "$MR_ID" "$NAME"
         gitlab_url=`echo $(git config --get gitflow.gitlab.url) | sed 's/\//%2F/g'`

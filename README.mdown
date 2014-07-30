@@ -54,6 +54,7 @@ The ``-d`` flag will accept all defaults.
 The difference between original git flow is in gitlab parameters to integrate with.
 
 Script will request gitlab url, your gitlab token and project
+Also you can add task url pattern to add link to the task to merge request
 
 ### Initialization of reviewers
 
