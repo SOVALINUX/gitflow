@@ -41,6 +41,7 @@ init() {
   require_gitflow_initialized
   gitflow_load_settings
   PREFIX=$(git config --get gitflow.prefix.feature)
+  TEMP_COMMIT="git flow temp commit"
 }
 
 usage() {
@@ -198,14 +199,27 @@ parse_remote_name() {
 
 cmd_start() {
 	DEFINE_boolean fetch false 'fetch from origin before performing local operation' F
+    DEFINE_boolean save false 'save uncommited and staged changes before switch' s
+    DEFINE_string base '' 'base branch for new feature' b
 	parse_args "$@"
-	BASE=${2:-$DEVELOP_BRANCH}
+	BASE=${FLAGS_base:-$DEVELOP_BRANCH}
 	require_name_arg
+    if flag save; then
+        git_do add -A :/
+        git_is_clean_working_tree
+        local result=$?
+        echo "clean result = ${result}"
+        if [ $result -ne 0 ]; then
+            git_do commit -am "$TEMP_COMMIT"
+            echo "There were uncommited changes - saving them to temp commit. It will be reset automatically once you switch back"
+        fi
+    fi
 
 	# sanity checks
     if has $BRANCH $(git_all_branches); then
         echo "Feature already exist. Checking it out."
         git_do checkout "$BRANCH"
+        check_is_last_commit_temporary
         exit 0
     fi
 
@@ -593,12 +607,34 @@ cmd_diff() {
 	fi
 }
 
+check_is_last_commit_temporary() {
+    last_msg=$(git_do log -1 --pretty=%B)
+    last_hash=$(git_do log -1 --pretty=%H)
+    in_origin=$(git_do branch -r --contains "$last_hash" | wc -l)
+    echo "last msg = ${last_msg}, last hash = ${last_hash}, in orig = ${in_origin}"
+    if [ "$last_msg" == "$TEMP_COMMIT" ] && [ "$in_origin" -eq 0 ]; then
+        echo "Last commit is temporary, resetting it"
+        git_do reset HEAD~1
+    fi
+}
+
 cmd_checkout() {
+    DEFINE_boolean save false 'save uncommited changes in this feature' s
 	parse_args "$@"
 
 	if [ "$NAME" != "" ]; then
 		expand_nameprefix_arg
+        if flag save; then
+            git_is_clean_working_tree
+            local result=$?
+            if [ $result -ne 0 ]; then
+                git_do add -A :/
+                git_do commit -am "$TEMP_COMMIT"
+                echo "There were uncommited changes - saving them to temp commit. It will be reset automatically once you switch back"
+            fi
+        fi
 		git_do checkout "$BRANCH"
+        check_is_last_commit_temporary
 	else
 		die "Name a feature branch explicitly."
 	fi
