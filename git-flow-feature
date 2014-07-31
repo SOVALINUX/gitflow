@@ -208,7 +208,6 @@ cmd_start() {
         git_do add -A :/
         git_is_clean_working_tree
         local result=$?
-        echo "clean result = ${result}"
         if [ $result -ne 0 ]; then
             git_do commit -am "$TEMP_COMMIT"
             echo "There were uncommited changes - saving them to temp commit. It will be reset automatically once you switch back"
