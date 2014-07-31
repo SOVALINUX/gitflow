@@ -354,7 +354,7 @@ cmd_default() {
     
     if ! git config --get gitflow.gitlab.taskurl >/dev/null 2>&1 || flag force; then
         default_suggestion=$(git config --get gitflow.gitlab.taskurl || echo "")
-        echo "Enter pattern for task url. For example https://jira.example.com/jira/browse/%TASK_ID% [${default_suggestion}]\n"
+        echo "Enter pattern for task url. For example https://jira.example.com/jira/browse/%TASK_ID% [${default_suggestion}]"
         read answer
         [ "$answer" = "-" ] && taskurl= || taskurl=${answer:-$default_suggestion}
         git_do config gitflow.gitlab.taskurl "${taskurl}"
