@@ -612,7 +612,6 @@ check_is_last_commit_temporary() {
     last_msg=$(git_do log -1 --pretty=%B)
     last_hash=$(git_do log -1 --pretty=%H)
     in_origin=$(git_do branch -r --contains "$last_hash" | wc -l)
-    echo "last msg = ${last_msg}, last hash = ${last_hash}, in orig = ${in_origin}"
     if [ "$last_msg" == "$TEMP_COMMIT" ] && [ "$in_origin" -eq 0 ]; then
         echo "Last commit is temporary, resetting it"
         git_do reset HEAD~1
