@@ -205,13 +205,7 @@ cmd_start() {
 	BASE=${FLAGS_base:-$DEVELOP_BRANCH}
 	require_name_arg
     if flag save; then
-        git_do add -A :/
-        git_is_clean_working_tree
-        local result=$?
-        if [ $result -ne 0 ]; then
-            git_do commit -am "$TEMP_COMMIT"
-            echo "There were uncommited changes - saving them to temp commit. It will be reset automatically once you switch back"
-        fi
+        save_to_temp_commit
     fi
 
 	# sanity checks
@@ -234,7 +228,7 @@ cmd_start() {
 	fi
 
 	# create branch
-	if ! git_do checkout -b "$BRANCH" "$BASE"; then
+	if ! git_do checkout -b --track "$BRANCH" "$BASE"; then
 		die "Could not create feature branch '$BRANCH'"
 	fi
 
@@ -249,8 +243,9 @@ cmd_start() {
 	echo
 }
 
-cmd_finish() {
+cmd_finish() {    
     DEFINE_boolean accept false "accept merge request immediately" "a"
+    DEFINE_string key '' "key for the task in bug tracker" 'k'
     parse_args "$@"
     expand_nameprefix_arg_or_current
     require_branch "$BRANCH"
@@ -303,9 +298,6 @@ cmd_finish() {
         git_do checkout "$BRANCH"
         git_do push
 	fi
-	if has "$ORIGIN/$DEVELOP_BRANCH" $(git_remote_branches); then
-		require_branches_equal "$DEVELOP_BRANCH" "$ORIGIN/$DEVELOP_BRANCH"
-	fi
     
     REVIEWERS_STR=$(git config --get gitflow.gitlab.reviewers)
     
@@ -335,8 +327,13 @@ cmd_finish() {
     fi
     FEATURE_BRANCH=`echo "${BRANCH}" | sed 's/\//%2F/g'`
     DEV_BRANCH=`echo "${DEVELOP_BRANCH}" | sed 's/\//%2F/g'`
-    echo "Enter task id for bug tracker or leave it empty"
-    read TASK_ID
+    if [ -z "${FLAGS_key}" -a "${FLAGS_key}" != " " ]; then
+        echo "Enter task id for bug tracker or leave it empty"
+        read TASK_ID
+    else
+        TASK_ID="${FLAGS_key}"
+    fi
+    
     gitlab_request "POST" "api/v3/projects/%PROJECT_ID%/merge_requests?source_branch=${FEATURE_BRANCH}&target_branch=${DEV_BRANCH}&assignee_id=${REVIEWER_ID}&title=Merge%20${FEATURE_BRANCH}%20to%20${DEV_BRANCH}" RESPONSE_RAW
     if [[ ${RESPONSE_RAW} != *\"id\"* ]]; then
         die "Creating merge request failed, response = ${RESPONSE_RAW}"
@@ -347,9 +344,11 @@ cmd_finish() {
     if [ -z "${TASK_URL_PATTERN}" -a "${TASK_URL_PATTERN}" != " " ] || [ -z "${TASK_ID}" -a "${TASK_ID}" != " " ]; then
         echo "Skipping adding task url"
     else
-        echo "Adding task link to merge request"
-        TASK_URL=`echo "${TASK_URL_PATTERN}" | sed "s/%TASK_ID%/${TASK_ID}/g" | sed "s/\//%2F/g" | sed "s/ /%20/g" | sed "s/&/%26/g" | sed "s/\?/%3F/g"`
+        TASK_URL=`echo "${TASK_URL_PATTERN}" | sed "s/{TASK_ID}/${TASK_ID}/g" | sed "s/\//%2F/g" | sed "s/ /%20/g" | sed "s/&/%26/g" | sed "s/\?/%3F/g"`
         gitlab_request "POST" "api/v3/projects/%PROJECT_ID%/merge_request/${MR_ID}/comments?note=${TASK_URL}" RESPONSE_RAW
+        if [[ ${RESPONSE_RAW} != *\"note\"* ]]; then
+            echo "Some error within adding comment, response is ${RESPONSE_RAW}"
+        fi
     fi
     
     if flag accept; then
@@ -617,6 +616,21 @@ check_is_last_commit_temporary() {
     fi
 }
 
+save_to_temp_commit() {
+    git_do add -A :/
+    git_is_clean_working_tree
+    local result=$?
+    local cur_branch=$(git_current_branch)
+    if [ $result -ne 0 ]; then
+        if [ "${cur_branch}" -ne "${DEVELOP_BRANCH}" ]; then
+            git_do commit -am "$TEMP_COMMIT"
+            echo "There were uncommited changes - saving them to temp commit. It will be reset automatically once you switch back"
+        else
+            echo "You are on develop branch all your changes will move to feature branch"
+        fi
+    fi
+}
+
 cmd_checkout() {
     DEFINE_boolean save false 'save uncommited changes in this feature' s
 	parse_args "$@"
@@ -624,13 +638,7 @@ cmd_checkout() {
 	if [ "$NAME" != "" ]; then
 		expand_nameprefix_arg
         if flag save; then
-            git_is_clean_working_tree
-            local result=$?
-            if [ $result -ne 0 ]; then
-                git_do add -A :/
-                git_do commit -am "$TEMP_COMMIT"
-                echo "There were uncommited changes - saving them to temp commit. It will be reset automatically once you switch back"
-            fi
+            save_to_temp_commit
         fi
 		git_do checkout "$BRANCH"
         check_is_last_commit_temporary

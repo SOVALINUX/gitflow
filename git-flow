@@ -84,11 +84,12 @@ main() {
 	# use the shFlags project to parse the command line arguments
 	. "$GITFLOW_DIR/gitflow-shFlags"
 	FLAGS_PARENT="git flow"
+    
 
-  # allow user to request git action logging
-  DEFINE_boolean show_commands false 'show actions taken (git commands)' g
+    # allow user to request git action logging
+    DEFINE_boolean show_commands false 'show actions taken (git commands)' g
 
-  # do actual parsing
+    # do actual parsing
 	FLAGS "$@" || exit $?
 	eval set -- "${FLAGS_ARGV}"
 
@@ -103,6 +104,7 @@ main() {
 	# run command
 	. "$GITFLOW_DIR/git-flow-$SUBCOMMAND"
 	FLAGS_PARENT="git flow $SUBCOMMAND"
+    
 
 	# test if the first argument is a flag (i.e. starts with '-')
 	# in that case, we interpret this arg as a flag for the default
@@ -116,7 +118,6 @@ main() {
 		usage
 		exit 1
 	fi
-
 	# run the specified action
   if [ $SUBACTION != "help" ] && [ $SUBCOMMAND != "init" ] ; then
     init

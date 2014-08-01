@@ -267,7 +267,8 @@ require_git_repo() {
 }
 
 require_gitflow_initialized() {
-	if ! gitflow_is_initialized; then
+    local inited=$(git config --get gitflow.inited)
+    if [ "${inited}" != "true" ]; then
 		die "fatal: Not a gitflow-enabled repo yet. Please run \"git flow init\" first."
 	fi
 }
@@ -348,6 +349,6 @@ gitlab_request() {
     path=`echo "$2" | sed "s/%PROJECT_ID%/${gitlab_project_id}/g"`
     url="${gitlab_url}${path}${connector}private_token=${gitlab_token}"
     #printf "\n*****request to $url with method $1 *****\n"
-    RESPONSE_RAW=`curl -X $1 "$url"`
+    RESPONSE_RAW=`curl -s -X $1 "$url"`
     eval $__resultvar="'${RESPONSE_RAW}'"
 }

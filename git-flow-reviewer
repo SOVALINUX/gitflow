@@ -67,7 +67,7 @@ cmd_list() {
     read -a REVIEWERS <<< "${REVIEWERS_STR}"
     echo "List of reviewers:"
     for rev in ${REVIEWERS[@]}; do
-        echo "${rev}"
+        echo "${rev}" | sed 's/;.*//g'
     done
 }
 
@@ -82,7 +82,7 @@ cmd_add() {
     gitlab_url=$(git config --get gitflow.gitlab.url)
     gitlab_token=$(git config --get gitflow.gitlab.token)
     gitlab_request "GET" "api/v3/users?search=${NAME}" RESPONSE_RAW
-    USER_ID=`echo "$RESPONSE_RAW" | sed 's/.*"id":\([0-9]*\).*/\1/'`
+    USER_ID=`echo "$RESPONSE_RAW" | sed 's/.*"id":\([0-9]*\).*/\1/' | sed 's/[\[\]]*//g'`
     if [ -z "${USER_ID}" -a "${USER_ID}" != " " ]; then
         die "No such user found"
     fi
