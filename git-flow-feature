@@ -228,7 +228,7 @@ cmd_start() {
 	fi
 
 	# create branch
-	if ! git_do checkout -b --track "$BRANCH" "$BASE"; then
+	if ! git_do checkout --track -b "$BRANCH" "$BASE"; then
 		die "Could not create feature branch '$BRANCH'"
 	fi
 
