@@ -386,6 +386,9 @@ do_accept() {
         echo "Branch cannot be merged automatically, performing manual merge"
         gitlab_request "PUT" "api/v3/projects/%PROJECT_ID%/merge_request/$1?state_event=close" RESPONSE_RAW
         cmd_finish_local "-k" "$2"
+    else
+        git_do checkout "${DEVELOP_BRANCH}"
+        git_do pull --rebase
     fi
 }
 
