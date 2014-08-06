@@ -231,7 +231,7 @@ cmd_start() {
 	if ! git_do checkout -b "$BRANCH" "$BASE"; then
 		die "Could not create feature branch '$BRANCH'"
 	fi
-    git_do branch -u "${ORIGIN}/${BRANCH}"
+    git_do branch --set-upstream-to=${ORIGIN}/${BRANCH} ${BRANCH}
 
 	echo
 	echo "Summary of actions:"
@@ -245,8 +245,8 @@ cmd_start() {
 }
 
 cmd_finish() {    
-    DEFINE_boolean accept false "accept merge request immediately" "a"
-    DEFINE_string key '' "key for the task in bug tracker" 'k'
+    DEFINE_boolean accept false "accept merge request immediately" a
+    DEFINE_string task "" "key for the task in bug tracker" t
     parse_args "$@"
     expand_nameprefix_arg_or_current
     require_branch "$BRANCH"
@@ -306,6 +306,7 @@ cmd_finish() {
         echo -e "No reviewers yet. Run \e[37mgit flow reviewer add Name\e[0m to add new reviewer"
         exit 0
     fi
+    PREV_IFS="$IFS"
     IFS=","
     read -a REVIEWERS <<< "${REVIEWERS_STR}"
     echo "Pick reviewer from list:"
@@ -323,16 +324,17 @@ cmd_finish() {
         fi
         index=`expr $index + 1`
     done
+    IFS="$PREV_IFS"
     if [ -z "${REVIEWER_ID}" -a "${REVIEWER_ID}" != " " ]; then
         die "No reviewer picked. Please enter number to pick from list"
     fi
     FEATURE_BRANCH=`echo "${BRANCH}" | sed 's/\//%2F/g'`
     DEV_BRANCH=`echo "${DEVELOP_BRANCH}" | sed 's/\//%2F/g'`
-    if [ -z "${FLAGS_key}" -a "${FLAGS_key}" != " " ]; then
+    if [ -z "${FLAGS_task}" -a "${FLAGS_task}" != " " ]; then
         echo "Enter task id for bug tracker or leave it empty"
         read TASK_ID
     else
-        TASK_ID="${FLAGS_key}"
+        TASK_ID="${FLAGS_task}"
     fi
     
     gitlab_request "POST" "api/v3/projects/%PROJECT_ID%/merge_requests?source_branch=${FEATURE_BRANCH}&target_branch=${DEV_BRANCH}&assignee_id=${REVIEWER_ID}&title=Merge%20${FEATURE_BRANCH}%20to%20${DEV_BRANCH}" RESPONSE_RAW
@@ -346,9 +348,10 @@ cmd_finish() {
         echo "Skipping adding task url"
     else
         TASK_URL=`echo "${TASK_URL_PATTERN}" | sed "s/{TASK_ID}/${TASK_ID}/g" | sed "s/\//%2F/g" | sed "s/ /%20/g" | sed "s/&/%26/g" | sed "s/\?/%3F/g"`
-        gitlab_request "POST" "api/v3/projects/%PROJECT_ID%/merge_request/${MR_ID}/comments?note=${TASK_URL}" RESPONSE_RAW
+        COMMENT_URL="api/v3/projects/%PROJECT_ID%/merge_request/${MR_ID}/comments?note=${TASK_URL}"
+        gitlab_request "POST" "${COMMENT_URL}" RESPONSE_RAW
         if [[ ${RESPONSE_RAW} != *\"note\"* ]]; then
-            echo "Some error within adding comment, response is ${RESPONSE_RAW}"
+            echo "Some error within adding comment, response is ${RESPONSE_RAW}, url is ${COMMENT_URL}"
         fi
     fi
     
@@ -382,11 +385,16 @@ do_accept() {
         die "Error: Should be two arguments - id of the merge request and name of the feature"
     fi
     gitlab_request "PUT" "api/v3/projects/%PROJECT_ID%/merge_request/$1/merge" RESPONSE_RAW
+    
     echo "Result of accepting merge request $1 is ${RESPONSE_RAW}"
     if [[ ${RESPONSE_RAW} == *Branch\ cannot\ be\ merged* ]]; then
         echo "Branch cannot be merged automatically, performing manual merge"
         gitlab_request "PUT" "api/v3/projects/%PROJECT_ID%/merge_request/$1?state_event=close" RESPONSE_RAW
-        cmd_finish_local "-k" "$2"
+        IGNORE_PARAMS="true"
+        FLAGS_keep="true"
+        echo "Calling finish local"
+        git_do checkout "$BRANCH"
+        cmd_finish_local
     else
         git_do checkout "${DEVELOP_BRANCH}"
         git_do pull --rebase
@@ -402,14 +410,17 @@ cmd_revert() {
 }
 
 cmd_finish_local() {
-	DEFINE_boolean fetch false "fetch from $ORIGIN before performing finish" F
-	DEFINE_boolean rebase false "rebase instead of merge" r
-	DEFINE_boolean keep false "keep branch after performing finish" k
-	DEFINE_boolean force_delete false "force delete feature branch after finish" D
-	DEFINE_boolean squash false "squash feature during merge" S
-	parse_args "$@"
-	expand_nameprefix_arg_or_current
-
+    #just for local usage, because pass with params almost impossible correctly
+    if [ -z "${IGNORE_PARAMS}" ]; then
+        echo "Finish local no ignore params"
+        DEFINE_boolean fetch false "fetch from $ORIGIN before performing finish" F
+        DEFINE_boolean rebase false "rebase instead of merge" r
+        DEFINE_boolean keep false "keep branch after performing finish" k
+        DEFINE_boolean force_delete false "force delete feature branch after finish" D
+        DEFINE_boolean squash false "squash feature during merge" S
+        parse_args "$@"
+        expand_nameprefix_arg_or_current    
+    fi
 	# sanity checks
 	require_branch "$BRANCH"
 
