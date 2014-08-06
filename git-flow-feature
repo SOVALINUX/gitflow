@@ -228,13 +228,14 @@ cmd_start() {
 	fi
 
 	# create branch
-	if ! git_do checkout --track -b "$BRANCH" "$BASE"; then
+	if ! git_do checkout -b "$BRANCH" "$BASE"; then
 		die "Could not create feature branch '$BRANCH'"
 	fi
+    git_do branch -u "${ORIGIN}/${BRANCH}"
 
 	echo
 	echo "Summary of actions:"
-	echo "- A new branch '$BRANCH' was created, based on '$BASE'"
+	echo "- A new branch '$BRANCH' was created, based on '$BASE', tracking '${ORIGIN}'"
 	echo "- You are now on branch '$BRANCH'"
 	echo ""
 	echo "Now, start committing on your feature. When done, use:"
