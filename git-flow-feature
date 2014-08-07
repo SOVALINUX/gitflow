@@ -391,7 +391,11 @@ do_accept() {
         echo "Branch cannot be merged automatically, performing manual merge"
         gitlab_request "PUT" "api/v3/projects/%PROJECT_ID%/merge_request/$1?state_event=close" RESPONSE_RAW
         IGNORE_PARAMS="true"
-        FLAGS_keep="true"
+        FLAGS_keep=$FLAGS_TRUE
+        FLAGS_fetch=$FLAGS_FALSE
+        FLAGS_rebase=$FLAGS_FALSE
+        FLAGS_force=$FLAGS_FALSE
+        FLAGS_squash=$FLAGS_FALSE
         echo "Calling finish local"
         git_do checkout "$BRANCH"
         cmd_finish_local
@@ -517,8 +521,8 @@ cmd_finish_local() {
 		echo "    git mergetool"
 		echo "    git commit"
 		echo 
-		echo "You can then complete the finish by running it again:"
-		echo "    git flow feature finish $NAME"
+		echo "You can then complete the finish:"
+		echo "    git push --no-verify"
 		echo
 		exit 1
 	fi
@@ -557,6 +561,7 @@ helper_finish_cleanup() {
 	fi
 	echo "- You are now on branch '$DEVELOP_BRANCH'"
 	echo
+    git_do push --no-verify
 }
 
 cmd_publish() {
