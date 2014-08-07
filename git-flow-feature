@@ -231,6 +231,8 @@ cmd_start() {
 	if ! git_do checkout -b "$BRANCH" "$BASE"; then
 		die "Could not create feature branch '$BRANCH'"
 	fi
+    #push new branch to have ability add tracking
+    git_do push
     git_do branch --set-upstream-to=${ORIGIN}/${BRANCH} ${BRANCH}
 
 	echo
