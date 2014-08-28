@@ -53,6 +53,7 @@ usage() {
 	echo "       git flow feature track <name>"
     echo "       git flow feature accept <name>"
     echo "       git flow feature revert <name>"
+    echo "       git flow feature remove_old -e [<name>]"
 	echo "       git flow feature diff [<name|nameprefix>]"
 	echo "       git flow feature rebase [-i] [<name|nameprefix>]"
 	echo "       git flow feature checkout [<name|nameprefix>]"
@@ -195,6 +196,81 @@ parse_remote_name() {
 	REMOTE=$1
 	NAME=$2
 	BRANCH=$PREFIX$NAME
+}
+
+cmd_remove_old() {
+    DEFINE_string exclude '' 'exclude given features' e
+    DEFINE_string include '' 'include given features' i
+    parse_args "$@"
+    
+    local feature_branches
+	local current_branch
+	local short_names
+	feature_branches=$(echo "$(git_local_branches)" | grep "^$PREFIX")
+	if [ -z "$feature_branches" ]; then
+		warn "No feature branches exist."
+		warn ""
+		warn "You can start a new feature branch:"
+		warn ""
+		warn "    git flow feature start <name> [<base>]"
+		warn ""
+		exit 0
+	fi
+	current_branch=$(git branch --no-color | grep '^\* ' | grep -v 'no branch' | sed 's/^* //g')
+	short_names=$(echo "$feature_branches" | sed "s ^$PREFIX  g")
+
+    PREV_IFS="$IFS"
+    IFS=","
+    read -a EXCLUDE_BRANCHES_ARR <<< "${FLAGS_exclude}"
+    local branches_to_remove=()
+    read -a branches_to_remove <<< "${FLAGS_include}"
+    IFS=${PREV_IFS}
+    local branch
+    local EXCLUDE_BRANCHES=""
+    for branch in ${EXCLUDE_BRANCHES_ARR[@]}; do
+        local fullname="${branch}"
+        if [[ "${fullname}" != ${PREFIX}* ]]; then
+            fullname="$PREFIX${fullname}"
+        fi
+        EXCLUDE_BRANCHES="${EXCLUDE_BRANCHES}#${fullname}#"
+    done
+	local branch
+	for branch in $short_names; do
+		local fullname=$PREFIX$branch
+        local mergeShaId=$(git_do log -g --grep="Merge branch '\?${fullname}'\? into '\?${DEVELOP_BRANCH}'\?" --pretty=%H | sort | uniq)
+        if [ -z "${mergeShaId}" -a "${mergeShaId}" != " " ]; then
+            echo "No merge commit for feature ${branch}"
+        else
+            if [ `git_do branch -r --contains ${mergeShaId} | grep "$ORIGIN/$MASTER_BRANCH" | wc -l` -gt "1" ]; then
+                if [[ "${EXCLUDE_BRANCHES}" == *#${fullname}#* ]]; then
+                    echo "Ignoring feature ${branch} for remove "
+                else 
+                    echo -e "\e[31mfeature ${branch} in master and will be removed\e[0m"
+                    branches_to_remove+=("${fullname}")
+                fi
+            else
+                echo "No merge commit in MASTER for feature ${branch}, sha id for merge is ${mergeShaId}"
+            fi
+        fi
+	done
+    echo 
+    echo "Branches above can be removed, if something should be excluded run this command"
+    echo 
+    echo "  git flow feature remove_old -e featureName1,featureName2"
+    echo 
+    echo "Remove all branches above and included manually?[y/n]"
+    read remove_branches
+    if [ "${remove_branches}" == "y" ]; then
+        local branch
+        for branch in ${branches_to_remove[@]}; do
+            local fullname="${branch}"
+            if [[ "${fullname}" != ${PREFIX}* ]]; then
+                fullname="$PREFIX${fullname}"
+            fi
+            git branch -d ${fullname}
+            git_do push origin --delete ${fullname}
+        done
+    fi
 }
 
 cmd_start() {
@@ -646,7 +722,7 @@ save_to_temp_commit() {
     local result=$?
     local cur_branch=$(git_current_branch)
     if [ $result -ne 0 ]; then
-        if [ "${cur_branch}" -ne "${DEVELOP_BRANCH}" ]; then
+        if [ "${cur_branch}" != "${DEVELOP_BRANCH}" ]; then
             git_do commit -am "$TEMP_COMMIT"
             echo "There were uncommited changes - saving them to temp commit. It will be reset automatically once you switch back"
         else
