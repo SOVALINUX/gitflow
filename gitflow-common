@@ -191,7 +191,16 @@ gitflow_has_gitlab_configured() {
 }
 
 gitflow_is_initialized() {
-	gitflow_has_master_configured                    && \
+    local inited=$(git config --get gitflow.inited)
+    if [ "${inited}" != "true" ]; then
+        return 1
+    else
+        return 0
+    fi
+}
+
+gitflow_is_initialized_all() {
+    gitflow_has_master_configured                    && \
     gitflow_has_gitlab_configured                    && \
 	gitflow_has_develop_configured                   && \
 	[ "$(git config --get gitflow.branch.master)" !=    \

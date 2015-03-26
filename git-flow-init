@@ -220,9 +220,6 @@ cmd_default() {
 		created_gitflow_branch=1
 	fi
 
-	# assert the gitflow repo has been correctly initialized
-	gitflow_is_initialized
-
 	# switch to develop branch if its newly created
 	if [ $created_gitflow_branch -eq 1 ]; then
 		git_do checkout -q "$develop_branch"
@@ -245,12 +242,7 @@ cmd_default() {
 	if ! git config --get gitflow.prefix.feature >/dev/null 2>&1 || flag force; then
 		default_suggestion=$(git config --get gitflow.prefix.feature || echo feature/)
 		printf "Feature branches? [$default_suggestion] "
-		if noflag defaults; then
-			read answer
-		else
-			printf "\n"
-		fi
-		[ "$answer" = "-" ] && prefix= || prefix=${answer:-$default_suggestion}
+        parse_answer_with_default prefix
 		git_do config gitflow.prefix.feature "$prefix"
 	fi
 
@@ -258,12 +250,7 @@ cmd_default() {
 	if ! git config --get gitflow.prefix.release >/dev/null 2>&1 || flag force; then
 		default_suggestion=$(git config --get gitflow.prefix.release || echo release/)
 		printf "Release branches? [$default_suggestion] "
-		if noflag defaults; then
-			read answer
-		else
-			printf "\n"
-		fi
-		[ "$answer" = "-" ] && prefix= || prefix=${answer:-$default_suggestion}
+		parse_answer_with_default prefix
 		git_do config gitflow.prefix.release "$prefix"
 	fi
 
@@ -272,12 +259,7 @@ cmd_default() {
 	if ! git config --get gitflow.prefix.hotfix >/dev/null 2>&1 || flag force; then
 		default_suggestion=$(git config --get gitflow.prefix.hotfix || echo hotfix/)
 		printf "Hotfix branches? [$default_suggestion] "
-		if noflag defaults; then
-			read answer
-		else
-			printf "\n"
-		fi
-		[ "$answer" = "-" ] && prefix= || prefix=${answer:-$default_suggestion}
+		parse_answer_with_default prefix
 		git_do config gitflow.prefix.hotfix "$prefix"
 	fi
 
@@ -286,12 +268,7 @@ cmd_default() {
 	if ! git config --get gitflow.prefix.support >/dev/null 2>&1 || flag force; then
 		default_suggestion=$(git config --get gitflow.prefix.support || echo support/)
 		printf "Support branches? [$default_suggestion] "
-		if noflag defaults; then
-			read answer
-		else
-			printf "\n"
-		fi
-		[ "$answer" = "-" ] && prefix= || prefix=${answer:-$default_suggestion}
+		parse_answer_with_default prefix
 		git_do config gitflow.prefix.support "$prefix"
 	fi
 
@@ -300,12 +277,7 @@ cmd_default() {
 	if ! git config --get gitflow.prefix.versiontag >/dev/null 2>&1 || flag force; then
 		default_suggestion=$(git config --get gitflow.prefix.versiontag || echo "")
 		printf "Version tag prefix? [$default_suggestion] "
-		if noflag defaults; then
-			read answer
-		else
-			printf "\n"
-		fi
-		[ "$answer" = "-" ] && prefix= || prefix=${answer:-$default_suggestion}
+		parse_answer_with_default prefix
 		git_do config gitflow.prefix.versiontag "$prefix"
 	fi
     
@@ -313,8 +285,7 @@ cmd_default() {
     if ! git config --get gitflow.gitlab.url >/dev/null 2>&1 || flag force; then
         default_suggestion=$(git config --get gitflow.gitlab.url || echo "")
 		printf "Enter Gitlab url. For example https://git.example.com/ [${default_suggestion}]\n"
-        read answer
-        [ "$answer" = "-" ] && gitlab_url= || gitlab_url=${answer:-$default_suggestion}
+        parse_answer gitlab_url
 		git_do config gitflow.gitlab.url "$gitlab_url"
 	fi
     
@@ -325,8 +296,7 @@ cmd_default() {
         fi
         default_suggestion=$(git config --get gitflow.gitlab.token || echo "")
 		printf "Enter Gitlab token for your account. Probably you can found it at ${gitlab_url}profile/account : [${default_suggestion}]\n"
-        read answer
-        [ "$answer" = "-" ] && gitlab_token= || gitlab_token=${answer:-$default_suggestion}
+        parse_answer gitlab_token
 		git_do config gitflow.gitlab.token "$gitlab_token"
 	fi
     
@@ -340,10 +310,9 @@ cmd_default() {
         fi
         default_suggestion=$(git config --get gitflow.gitlab.project || echo "")
         echo "Enter gitlab project space and name, e.g. prj-space/my-project [${default_suggestion}]"
-        read answer
-        [ "$answer" = "-" ] && PROJECT= || PROJECT=${answer:-$default_suggestion}
+        parse_answer PROJECT
         PROJECT_ESC=`echo "$PROJECT" | sed 's/\//%2F/g'`
-        RESPONSE_RAW=`curl -X GET "${gitlab_url}api/v3/projects/${PROJECT_ESC}?private_token=${gitlab_token}"`
+        RESPONSE_RAW=`curl -k -X GET "${gitlab_url}api/v3/projects/${PROJECT_ESC}?private_token=${gitlab_token}"`
         if [[ ${RESPONSE_RAW} != *\"id\"* ]]; then
             die "Nu such project found"
         fi
@@ -355,16 +324,55 @@ cmd_default() {
     if ! git config --get gitflow.gitlab.taskurl >/dev/null 2>&1 || flag force; then
         default_suggestion=$(git config --get gitflow.gitlab.taskurl || echo "")
         echo "Enter pattern for task url. For example https://jira.example.com/jira/browse/{TASK_ID} [${default_suggestion}]"
-        read answer
-        [ "$answer" = "-" ] && taskurl= || taskurl=${answer:-$default_suggestion}
+        parse_answer taskurl
         git_do config gitflow.gitlab.taskurl "${taskurl}"
     fi
     
-    if gitflow_is_initialized; then
+    if gitflow_is_initialized_all; then
         git_do config gitflow.inited "true"
     fi
+    
+    gitflow_is_initialized
 
 	# TODO: what to do with origin?
+}
+
+parse_answer() {
+    local __resultvar=$1
+    local __result=""
+    local __valid="false"
+    while [ "${__valid}" == "false" ]; do
+        read answer
+        if [[ "${answer}" == *[* ]] || [[ "${answer}" == *]* ]]; then
+            echo "Invalid symbols found in '${answer}'. It should be without brackets and imprintable symbols. Pleasy retry"
+            __valid="false"
+        else
+            __valid="true"
+        fi
+    done
+    [ "$answer" = "-" ] && __result= || __result=${answer:-$default_suggestion}
+    eval $__resultvar="'${__result}'"
+}
+
+parse_answer_with_default() {
+    local __resultvar=$1
+    local __result=""
+    if noflag defaults; then
+        local __valid="false"
+        while [ "${__valid}" == "false" ]; do
+            read answer
+            if [[ "${answer}" == *[* ]] || [[ "${answer}" == *]* ]]; then
+                echo "Invalid symbols found in '${answer}'. It should be without brackets and imprintable symbols. Pleasy retry"
+                __valid="false"
+            else
+                __valid="true"
+            fi
+        done
+    else
+        printf "\n"
+    fi
+    [ "$answer" = "-" ] && __result= || __result=${answer:-$default_suggestion}
+    eval $__resultvar="'${__result}'"
 }
 
 cmd_help() {
