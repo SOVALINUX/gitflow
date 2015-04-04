@@ -63,12 +63,14 @@ cmd_list() {
         echo -e "No reviewers yet. Run \e[37mgit flow reviewer add Name\e[0m to add new reviewer"
         exit 0
     fi
+    PREV_IFS="$IFS"
     IFS=","
     read -a REVIEWERS <<< "${REVIEWERS_STR}"
     echo "List of reviewers:"
     for rev in ${REVIEWERS[@]}; do
         echo "${rev}" | sed 's/;.*//g'
     done
+    IFS=${PREV_IFS}
 }
 
 cmd_add() {
