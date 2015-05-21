@@ -206,7 +206,7 @@ cmd_remove_old() {
     local feature_branches
 	local current_branch
 	local short_names
-	feature_branches=$(echo "$(git_remote_branches)" | grep "^$PREFIX")
+	feature_branches=$(echo "$(git_remote_branches)" | grep "^$ORIGIN/$PREFIX")
 	if [ -z "$feature_branches" ]; then
 		warn "No feature branches exist."
 		warn ""
@@ -217,7 +217,7 @@ cmd_remove_old() {
 		exit 0
 	fi
 	current_branch=$(git branch --no-color | grep '^\* ' | grep -v 'no branch' | sed 's/^* //g')
-	short_names=$(echo "$feature_branches" | sed "s ^$PREFIX  g")
+	short_names=$(echo "$feature_branches" | sed "s ^$ORIGIN/$PREFIX  g")
 
     PREV_IFS="$IFS"
     IFS=","
@@ -238,6 +238,9 @@ cmd_remove_old() {
 	for branch in $short_names; do
 		local fullname=$PREFIX$branch
         local mergeShaId=$(git_do log -g --grep="Merge branch '\?${fullname}'\? into '\?${DEVELOP_BRANCH}'\?" --pretty=%H | sort | uniq)
+        if [ -z "${mergeShaId}" -a "${mergeShaId}" != " " ]; then
+            mergeShaId=$(git_do log --grep="Merge branch '\?${fullname}'\? into '\?${DEVELOP_BRANCH}'\?" --pretty=%H | sort | uniq)
+        fi
         if [ -z "${mergeShaId}" -a "${mergeShaId}" != " " ]; then
             echo "No merge commit for feature ${branch}"
         else
